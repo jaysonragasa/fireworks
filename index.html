@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Distant City Fireworks - Rainbow Billboard</title>
+    <title>Distant City Fireworks - Advanced Controls</title>
     <style>
         body, html {
             margin: 0;
@@ -42,36 +42,110 @@
             opacity: 0.5;
         }
 
+        /* Top Settings Panel */
         #controls {
             position: absolute;
-            bottom: 20px;
+            top: 20px;
             right: 20px;
-            background: rgba(0, 0, 0, 0.6);
-            padding: 12px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 0;
             border-radius: 12px;
-            backdrop-filter: blur(5px);
+            backdrop-filter: blur(8px);
             color: white;
             display: flex;
             flex-direction: column;
-            gap: 8px;
             pointer-events: auto;
             z-index: 20;
-            border: 1px solid rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.15);
+            width: 200px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+        }
+
+        #controls.collapsed {
+            width: 110px;
+            background: rgba(0, 0, 0, 0.4);
+        }
+
+        #controls-header {
+            padding: 10px 15px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.8rem;
+            font-weight: bold;
+            background: rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        #controls-content {
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            transition: opacity 0.2s;
+        }
+
+        #controls.collapsed #controls-content {
+            display: none;
+            opacity: 0;
+        }
+
+        .control-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            font-size: 0.75rem;
         }
 
         button {
             background: rgba(255, 255, 255, 0.1);
             border: 1px solid rgba(255, 255, 255, 0.2);
             color: white;
-            padding: 6px 12px;
+            padding: 6px 10px;
             border-radius: 4px;
             cursor: pointer;
             transition: all 0.2s;
-            font-size: 0.8rem;
+            font-size: 0.75rem;
+            width: 100%;
+            text-align: center;
         }
 
         button:hover {
             background: rgba(255, 255, 255, 0.2);
+        }
+
+        input[type="number"] {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #0ff;
+            padding: 4px 6px;
+            border-radius: 4px;
+            width: 45px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+            outline: none;
+            text-align: center;
+        }
+
+        input[type="number"]::-webkit-inner-spin-button {
+            opacity: 1;
+            cursor: pointer;
+        }
+
+        label {
+            white-space: nowrap;
+            opacity: 0.8;
+        }
+
+        .toggle-icon {
+            font-size: 0.6rem;
+            transition: transform 0.3s;
+        }
+        .collapsed .toggle-icon {
+            transform: rotate(-180deg);
         }
     </style>
 </head>
@@ -83,13 +157,77 @@
     </div>
 
     <div id="controls">
-        <button id="toggleAuto">Auto: ON</button>
-        <button id="muteBtn">Sound: ON</button>
+        <div id="controls-header" onclick="toggleSettings()">
+            <span>SETTINGS</span>
+            <span class="toggle-icon">▼</span>
+        </div>
+        <div id="controls-content">
+            <button id="toggleAuto">Auto: ON</button>
+            
+            <div class="control-row">
+                <label>Simultaneous:</label>
+                <input type="number" id="simultaneousInput" min="1" max="15" value="1">
+            </div>
+
+            <div class="control-row">
+                <label>Density:</label>
+                <input type="number" id="densityInput" min="20" max="500" step="10" value="100">
+            </div>
+
+            <button id="muteBtn">Sound: ON</button>
+            <button id="qualityBtn">Quality: HIGH</button>
+        </div>
     </div>
 
     <canvas id="canvas"></canvas>
 
     <script>
+        /**
+         * CENTRAL CONFIGURATION
+         */
+        const CONFIG = {
+            quality: {
+                highQuality: true,    
+                starCount: 400,       
+                lowQualityStarCount: 150,
+                motionBlurOpacity: 0.22 
+            },
+            audio: {
+                launchEnabled: false, 
+                crackleChance: 0.4,   
+                explosionVolume: 0.3
+            },
+            celestial: {
+                rotationSpeed: 0.0006,
+                shootingStarChance: 0.006,
+                twinkleSpeed: 0.02,
+                moonRadius: 50
+            },
+            physics: {
+                gravity: 0.015,       
+                friction: 0.97,      
+                rocketGravity: 0.015,
+                particleDecayBase: 0.005,
+                willowDecayBase: 0.002,
+                willowGravity: 0.008
+            },
+            city: {
+                warningLightPulseSpeed: 0.003,
+                windowDensity: 0.4,       
+                windowToggleInterval: 12000, 
+                billboardRainbowSpeed: 25,
+                billboardWidthBase: 130,
+                billboardHeight: 65
+            },
+            launcher: {
+                autoIntervalMin: 800,
+                autoIntervalMax: 2000,
+                simultaneousCount: 1, 
+                particleDensity: 100, // User adjustable density
+                volleyChance: 0.3
+            }
+        };
+
         /**
          * AUDIO ENGINE
          */
@@ -118,53 +256,42 @@
             }
 
             playLaunch() {
-                return;
+                if (!CONFIG.audio.launchEnabled) return;
+                if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
             }
 
             playExplosion(isGrand = false, velocityY = 0) {
                 if (this.muted || !this.ctx || this.ctx.state !== 'running') return;
-                
                 const now = this.ctx.currentTime;
                 const duration = isGrand ? 1.0 : 0.7;
                 const dopplerMult = 1.0 - (velocityY * 0.02); 
-
                 const boom = this.ctx.createOscillator();
                 const boomGain = this.ctx.createGain();
                 boom.type = 'sine';
-                
                 const startFreq = 120 * dopplerMult;
                 const endFreq = 20 * dopplerMult;
-
                 boom.frequency.setValueAtTime(startFreq, now);
                 boom.frequency.exponentialRampToValueAtTime(endFreq, now + duration);
-                
-                boomGain.gain.setValueAtTime(isGrand ? 0.4 : 0.25, now);
+                boomGain.gain.setValueAtTime(isGrand ? CONFIG.audio.explosionVolume * 1.3 : CONFIG.audio.explosionVolume, now);
                 boomGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-                
                 boom.connect(boomGain);
                 boomGain.connect(this.ctx.destination);
-
                 const bufferSize = this.ctx.sampleRate * duration;
                 const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
                 const data = buffer.getChannelData(0);
                 for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-
                 const noise = this.ctx.createBufferSource();
                 noise.buffer = buffer;
                 const noiseFilter = this.ctx.createBiquadFilter();
                 const noiseGain = this.ctx.createGain();
-
                 noiseFilter.type = 'lowpass';
                 noiseFilter.frequency.setValueAtTime(1500 * dopplerMult, now);
                 noiseFilter.frequency.exponentialRampToValueAtTime(400, now + duration);
-
                 noiseGain.gain.setValueAtTime(isGrand ? 0.15 : 0.1, now);
                 noiseGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-
                 noise.connect(noiseFilter);
                 noiseFilter.connect(noiseGain);
                 noiseGain.connect(this.ctx.destination);
-
                 boom.start(now);
                 noise.start(now);
                 boom.stop(now + duration);
@@ -185,18 +312,15 @@
                 const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
                 const data = buffer.getChannelData(0);
                 for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-
                 const noise = this.ctx.createBufferSource();
                 noise.buffer = buffer;
                 const filter = this.ctx.createBiquadFilter();
                 filter.type = 'highpass';
                 filter.frequency.setValueAtTime(3500, time);
-
                 const gain = this.ctx.createGain();
                 gain.gain.setValueAtTime(0, time);
                 gain.gain.linearRampToValueAtTime(0.03, time + 0.002);
                 gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
-
                 noise.connect(filter);
                 filter.connect(gain);
                 gain.connect(this.ctx.destination);
@@ -245,7 +369,8 @@
             }
 
             generateStars() {
-                const count = 400;
+                this.stars = [];
+                const count = CONFIG.quality.highQuality ? CONFIG.quality.starCount : CONFIG.quality.lowQualityStarCount;
                 for (let i = 0; i < count; i++) {
                     const radius = Math.random() * Math.max(this.w, this.h) * 1.5;
                     const angle = Math.random() * Math.PI * 2;
@@ -258,9 +383,9 @@
             }
 
             update(dt) {
-                this.rotation += 0.0006;
-                this.stars.forEach(s => s.twinkle += 0.02);
-                if (Math.random() < 0.006) this.shootingStars.push(new ShootingStar(this.w, this.h));
+                this.rotation += CONFIG.celestial.rotationSpeed;
+                this.stars.forEach(s => s.twinkle += CONFIG.celestial.twinkleSpeed);
+                if (Math.random() < CONFIG.celestial.shootingStarChance) this.shootingStars.push(new ShootingStar(this.w, this.h));
                 this.shootingStars = this.shootingStars.filter(s => { s.update(); return s.active; });
             }
 
@@ -279,9 +404,11 @@
             }
 
             drawMoon(ctx) {
-                const mx = this.w * 0.15, my = this.h * 0.2, mRadius = 50, phase = this.moonPhase;
+                const mx = this.w * 0.15, my = this.h * 0.2, mRadius = CONFIG.celestial.moonRadius, phase = this.moonPhase;
                 ctx.save();
-                ctx.shadowBlur = 30; ctx.shadowColor = "rgba(200, 220, 255, 0.1)";
+                if (CONFIG.quality.highQuality) {
+                    ctx.shadowBlur = 30; ctx.shadowColor = "rgba(200, 220, 255, 0.1)";
+                }
                 ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
                 ctx.beginPath(); ctx.arc(mx, my, mRadius, 0, Math.PI * 2); ctx.fill();
                 ctx.shadowBlur = 0;
@@ -299,9 +426,11 @@
                 ctx.fill();
                 ctx.restore();
                 ctx.globalCompositeOperation = 'source-over';
-                const bloom = ctx.createRadialGradient(mx, my, mRadius * 0.8, mx, my, mRadius * 3);
-                bloom.addColorStop(0, "rgba(255, 250, 220, 0.12)"); bloom.addColorStop(1, "rgba(255, 250, 220, 0)");
-                ctx.fillStyle = bloom; ctx.beginPath(); ctx.arc(mx, my, mRadius * 3, 0, Math.PI * 2); ctx.fill();
+                if (CONFIG.quality.highQuality) {
+                    const bloom = ctx.createRadialGradient(mx, my, mRadius * 0.8, mx, my, mRadius * 3);
+                    bloom.addColorStop(0, "rgba(255, 250, 220, 0.12)"); bloom.addColorStop(1, "rgba(255, 250, 220, 0)");
+                    ctx.fillStyle = bloom; ctx.beginPath(); ctx.arc(mx, my, mRadius * 3, 0, Math.PI * 2); ctx.fill();
+                }
                 ctx.restore();
             }
         }
@@ -344,7 +473,9 @@
                     const windows = []; const rows = Math.floor(bH / 12), cols = Math.floor(bW / 10);
                     for (let r = 0; r < rows; r++) {
                         for (let c = 0; c < cols; c++) {
-                            if (Math.random() > 0.5) windows.push({ x: 4 + c * 8, y: 5 + r * 10, on: Math.random() > 0.5, nextFlip: Math.random() * 8000 });
+                            if (Math.random() < CONFIG.city.windowDensity) {
+                                windows.push({ x: 4 + c * 8, y: 5 + r * 10, on: Math.random() > 0.5, nextFlip: Math.random() * CONFIG.city.windowToggleInterval });
+                            }
                         }
                     }
                     this.buildings.push({ x: buildingX, bW, bH, windows, warningLightOffset: Math.random() * Math.PI * 2 });
@@ -356,7 +487,11 @@
             update(dt) {
                 this.buildings.forEach(b => { 
                     b.windows.forEach(w => {
-                        w.nextFlip -= dt; if (w.nextFlip <= 0) { w.on = !w.on; w.nextFlip = 2000 + Math.random() * 12000; }
+                        w.nextFlip -= dt; 
+                        if (w.nextFlip <= 0) { 
+                            w.on = !w.on; 
+                            w.nextFlip = 2000 + Math.random() * CONFIG.city.windowToggleInterval; 
+                        }
                     }); 
                 });
             }
@@ -365,20 +500,15 @@
                 ctx.save();
                 this.buildings.forEach((b, idx) => {
                     const bTop = this.h - b.bH;
-                    
-                    // Base silhouette
                     ctx.fillStyle = '#040406'; ctx.fillRect(b.x, bTop, b.bW, b.bH);
-                    
-                    // Aircraft Warning Pole & Light
                     this.drawWarningLight(ctx, b, bTop, nowTime);
-
-                    // Windows
                     b.windows.forEach(w => {
                         ctx.fillStyle = w.on ? 'rgba(255, 210, 140, 0.6)' : 'rgba(15, 15, 25, 0.4)';
                         ctx.fillRect(b.x + w.x, bTop + w.y, 3, 4);
                     });
-
-                    this.drawReflections(ctx, b, rockets, particles);
+                    if (CONFIG.quality.highQuality) {
+                        this.drawReflections(ctx, b, rockets, particles);
+                    }
                     if (idx === this.billboardBuildingIndex) this.drawOLED(ctx, b, rockets, particles);
                 });
                 ctx.restore();
@@ -393,8 +523,7 @@
                 ctx.moveTo(poleX, bTop);
                 ctx.lineTo(poleX, bTop - poleH);
                 ctx.stroke();
-
-                const pulse = (Math.sin(nowTime * 0.003 + b.warningLightOffset) + 1) / 2;
+                const pulse = (Math.sin(nowTime * CONFIG.city.warningLightPulseSpeed + b.warningLightOffset) + 1) / 2;
                 const lightY = bTop - poleH;
                 ctx.save();
                 const glowRadius = 4;
@@ -435,72 +564,44 @@
                 const nowMs = Date.now();
                 const timeStr = now.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 const dateStr = now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase();
-                
-                const panelW = Math.max(b.bW * 1.4, 130), panelH = 65;
-                let panelX = b.x + (b.bW - panelW) / 2;
-                panelX = Math.max(10, Math.min(panelX, this.w - panelW - 10));
+                const panelW = Math.max(b.bW * 1.4, CONFIG.city.billboardWidthBase), panelH = CONFIG.city.billboardHeight;
+                let panelX = b.x + (b.bW - panelW) / 2; panelX = Math.max(10, Math.min(panelX, this.w - panelW - 10));
                 const panelY = this.h - b.bH - panelH - 12;
-
-                // Support Beams
                 ctx.strokeStyle = '#151515'; ctx.lineWidth = 3; ctx.beginPath();
                 ctx.moveTo(b.x + b.bW * 0.2, this.h - b.bH); ctx.lineTo(panelX + panelW * 0.25, panelY + panelH);
                 ctx.moveTo(b.x + b.bW * 0.8, this.h - b.bH); ctx.lineTo(panelX + panelW * 0.75, panelY + panelH); ctx.stroke();
-
-                // Rainbow Cycling Color
-                const hue = (nowMs / 25) % 360;
+                const hue = (nowMs / CONFIG.city.billboardRainbowSpeed) % 360;
                 const rainbowColor = `hsl(${hue}, 100%, 70%)`;
                 const darkerRainbow = `hsl(${hue}, 100%, 40%)`;
-
-                // 1. Panel Background
                 ctx.fillStyle = '#000';
-                ctx.shadowBlur = 25;
-                ctx.shadowColor = rainbowColor;
+                if (CONFIG.quality.highQuality) {
+                    ctx.shadowBlur = 25; ctx.shadowColor = rainbowColor;
+                }
                 ctx.fillRect(panelX, panelY, panelW, panelH);
                 ctx.shadowBlur = 0;
-
-                // 2. Rainbow Border
-                ctx.strokeStyle = rainbowColor;
-                ctx.lineWidth = 2;
-                ctx.strokeRect(panelX, panelY, panelW, panelH);
-
-                // 3. Dynamic Reflections on Billboard Edges (Mirroring Building Effect)
-                const lights = [...rockets];
-                if (particles.length > 0) { 
-                    for(let i = 0; i < particles.length; i += 15) { 
-                        if (particles[i].alpha > 0.3) lights.push(particles[i]); 
-                    } 
+                ctx.strokeStyle = rainbowColor; ctx.lineWidth = 2; ctx.strokeRect(panelX, panelY, panelW, panelH);
+                if (CONFIG.quality.highQuality) {
+                    const lights = [...rockets];
+                    if (particles.length > 0) { for(let i = 0; i < particles.length; i += 15) { if (particles[i].alpha > 0.3) lights.push(particles[i]); } }
+                    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+                    lights.forEach(light => {
+                        const dist = Math.sqrt(Math.pow(light.x - (panelX + panelW/2), 2) + Math.pow(light.y - panelY, 2));
+                        const maxDist = 350;
+                        if (dist < maxDist) {
+                            const intensity = (1 - dist / maxDist) * (light.alpha || 1) * 0.4;
+                            ctx.strokeStyle = light.color; ctx.globalAlpha = intensity; ctx.lineWidth = 2.5; ctx.strokeRect(panelX - 1, panelY - 1, panelW + 2, panelH + 2);
+                        }
+                    });
+                    ctx.restore();
                 }
-
-                ctx.save();
-                ctx.globalCompositeOperation = 'lighter';
-                lights.forEach(light => {
-                    const dist = Math.sqrt(Math.pow(light.x - (panelX + panelW/2), 2) + Math.pow(light.y - panelY, 2));
-                    const maxDist = 350;
-                    if (dist < maxDist) {
-                        const intensity = (1 - dist / maxDist) * (light.alpha || 1) * 0.4;
-                        ctx.strokeStyle = light.color;
-                        ctx.globalAlpha = intensity;
-                        ctx.lineWidth = 2.5;
-                        ctx.strokeRect(panelX - 1, panelY - 1, panelW + 2, panelH + 2);
-                    }
-                });
-                ctx.restore();
-
-                // 4. OLED Content (Rainbow Text)
-                ctx.textAlign = 'center';
-                ctx.font = 'bold 18px "Courier New", monospace';
-                
-                // Scanlines
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
-                for(let i=0; i<panelH; i+=3) ctx.fillRect(panelX, panelY + i, panelW, 1);
-
-                ctx.shadowBlur = 10;
-                ctx.shadowColor = rainbowColor;
-                ctx.fillStyle = rainbowColor;
-                ctx.fillText(timeStr, panelX + panelW/2, panelY + 30);
-                
-                ctx.font = 'bold 11px "Courier New", monospace';
-                ctx.fillStyle = darkerRainbow; 
+                ctx.textAlign = 'center'; ctx.font = 'bold 18px "Courier New", monospace';
+                if (CONFIG.quality.highQuality) {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+                    for(let i=0; i<panelH; i+=3) ctx.fillRect(panelX, panelY + i, panelW, 1);
+                    ctx.shadowBlur = 10; ctx.shadowColor = rainbowColor;
+                }
+                ctx.fillStyle = rainbowColor; ctx.fillText(timeStr, panelX + panelW/2, panelY + 30);
+                ctx.font = 'bold 11px "Courier New", monospace'; ctx.fillStyle = darkerRainbow; 
                 ctx.fillText(dateStr, panelX + panelW/2, panelY + 52);
                 ctx.shadowBlur = 0;
             }
@@ -526,11 +627,10 @@
             constructor(x, y, targetY, color) {
                 this.x = x; this.y = y; this.targetY = targetY; this.color = color;
                 this.speed = 3 + Math.random() * 2.5; this.vx = (Math.random() - 0.5) * 1.5; this.vy = -this.speed;
-                this.alive = true;
-                audio.playLaunch();
+                this.alive = true; audio.playLaunch();
             }
             update() {
-                this.x += this.vx; this.y += this.vy; this.vy += 0.015; 
+                this.x += this.vx; this.y += this.vy; this.vy += CONFIG.physics.rocketGravity; 
                 if (this.vy >= 0 || this.y <= this.targetY) { this.explode(); this.alive = false; }
             }
             draw() {
@@ -543,18 +643,25 @@
                 const type = types[Math.floor(Math.random() * types.length)];
                 const isBig = (type === 'saturn' || type === 'willow');
                 audio.playExplosion(isBig, this.vy);
-                if (Math.random() > 0.4) audio.playCrackle();
+                if (Math.random() > CONFIG.audio.crackleChance) audio.playCrackle();
+                
+                // Use user-defined particle density
+                const baseCount = CONFIG.launcher.particleDensity;
+                
                 if (type === 'saturn') {
-                    for (let i = 0; i < 70; i++) particles.push(new Particle(this.x, this.y, this.color, 'sphere', 0, 0.7));
-                    const ringCount = 90, tilt = (Math.random() - 0.5) * Math.PI;
+                    const coreCount = Math.floor(baseCount * 0.7);
+                    for (let i = 0; i < coreCount; i++) particles.push(new Particle(this.x, this.y, this.color, 'sphere', 0, 0.7));
+                    const ringCount = Math.floor(baseCount * 0.9), tilt = (Math.random() - 0.5) * Math.PI;
                     for (let i = 0; i < ringCount; i++) particles.push(new Particle(this.x, this.y, this.color, 'saturn-ring', i/ringCount, 1.2, tilt));
                 } else if (type === 'double-ring') {
-                    for (let i = 0; i < 80; i++) particles.push(new Particle(this.x, this.y, this.color, 'ring', i/80, 0.8));
-                    for (let i = 0; i < 60; i++) particles.push(new Particle(this.x, this.y, '#ffffff', 'ring', i/60, 0.5));
+                    const r1 = Math.floor(baseCount * 0.8), r2 = Math.floor(baseCount * 0.6);
+                    for (let i = 0; i < r1; i++) particles.push(new Particle(this.x, this.y, this.color, 'ring', i/r1, 0.8));
+                    for (let i = 0; i < r2; i++) particles.push(new Particle(this.x, this.y, '#ffffff', 'ring', i/r2, 0.5));
                 } else if (type === 'willow') {
-                    for (let i = 0; i < 120; i++) particles.push(new Particle(this.x, this.y, `hsla(45, 100%, 60%, 1)`, 'willow', i/120));
+                    const count = Math.floor(baseCount * 1.2);
+                    for (let i = 0; i < count; i++) particles.push(new Particle(this.x, this.y, `hsla(45, 100%, 60%, 1)`, 'willow', i/count));
                 } else {
-                    const count = 100 + Math.random() * 80;
+                    const count = Math.floor(baseCount * (0.8 + Math.random() * 0.4));
                     for (let i = 0; i < count; i++) particles.push(new Particle(this.x, this.y, this.color, type, i / count));
                 }
             }
@@ -563,16 +670,17 @@
         class Particle {
             constructor(x, y, color, type, indexRatio, speedMult = 1, tilt = 0) {
                 this.x = x; this.y = y; this.color = color; this.alpha = 1;
-                this.decay = 0.005 + Math.random() * 0.008; this.gravity = 0.015; this.friction = 0.97; this.type = type;
+                this.decay = CONFIG.physics.particleDecayBase + Math.random() * 0.008; 
+                this.gravity = CONFIG.physics.gravity; this.friction = CONFIG.physics.friction; this.type = type;
                 const angle = Math.PI * 2 * Math.random(); let speed = (2 + Math.random() * 4) * speedMult;
                 if (type === 'sphere') { this.vx = Math.cos(angle) * speed; this.vy = Math.sin(angle) * speed; }
                 else if (type === 'ring') { const a = indexRatio * Math.PI * 2; this.vx = Math.cos(a) * 6 * speedMult; this.vy = Math.sin(a) * 6 * speedMult; }
                 else if (type === 'saturn-ring') { const a = indexRatio * Math.PI * 2; let rx = Math.cos(a) * 8, ry = Math.sin(a) * 2; this.vx = (rx * Math.cos(tilt) - ry * Math.sin(tilt)) * speedMult; this.vy = (rx * Math.sin(tilt) + ry * Math.cos(tilt)) * speedMult; }
-                else if (type === 'willow') { this.vx = Math.cos(angle) * (1 + Math.random() * 3); this.vy = Math.sin(angle) * (1 + Math.random() * 3); this.decay = 0.002 + Math.random() * 0.003; this.gravity = 0.008; this.friction = 0.985; }
+                else if (type === 'willow') { this.vx = Math.cos(angle) * (1 + Math.random() * 3); this.vy = Math.sin(angle) * (1 + Math.random() * 3); this.decay = CONFIG.physics.willowDecayBase + Math.random() * 0.003; this.gravity = CONFIG.physics.willowGravity; this.friction = 0.985; }
                 else if (type === 'heart') { const a = indexRatio * Math.PI * 2; this.vx = (16 * Math.pow(Math.sin(a), 3)) / 2.5; this.vy = -(13 * Math.cos(a) - 5 * Math.cos(2 * a) - 2 * Math.cos(3 * a) - Math.cos(4 * a)) / 2.5; this.vx *= 0.35 * speedMult; this.vy *= 0.35 * speedMult; }
             }
             update() { this.vx *= this.friction; this.vy *= this.friction; this.vy += this.gravity; this.x += this.vx; this.y += this.vy; this.alpha -= this.decay; }
-            draw() { ctx.save(); ctx.globalAlpha = this.alpha; ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(this.x, this.y, 1.2, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+            draw(ctx) { ctx.save(); ctx.globalAlpha = this.alpha; ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(this.x, this.y, 1.2, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
         }
 
         function createRocket(manualX) {
@@ -582,19 +690,62 @@
 
         function animate(time) {
             const dt = time - lastTime; lastTime = time;
-            ctx.fillStyle = 'rgba(2, 2, 6, 0.22)'; ctx.fillRect(0, 0, width, height);
+            ctx.fillStyle = CONFIG.quality.highQuality ? `rgba(2, 2, 6, ${CONFIG.quality.motionBlurOpacity})` : 'rgb(2, 2, 6)';
+            ctx.fillRect(0, 0, width, height);
             celestial.update(dt); celestial.draw(ctx);
-            if (autoLaunch && time - lastAutoLaunch > 600 + Math.random() * 1000) { createRocket(); if (Math.random() > 0.7) setTimeout(() => createRocket(), 200); lastAutoLaunch = time; }
+            if (autoLaunch && time - lastAutoLaunch > CONFIG.launcher.autoIntervalMin + Math.random() * (CONFIG.launcher.autoIntervalMax - CONFIG.launcher.autoIntervalMin)) { 
+                for(let i=0; i<CONFIG.launcher.simultaneousCount; i++) {
+                    setTimeout(() => createRocket(), i * 150);
+                }
+                lastAutoLaunch = time; 
+            }
             rockets = rockets.filter(r => { r.update(); r.draw(); return r.alive; });
-            particles = particles.filter(p => { p.update(); p.draw(); return p.alpha > 0; });
+            particles = particles.filter(p => { p.update(); p.draw(ctx); return p.alpha > 0; });
             city.update(dt); city.draw(ctx, rockets, particles);
             requestAnimationFrame(animate);
         }
 
+        function toggleSettings() {
+            document.getElementById('controls').classList.toggle('collapsed');
+        }
+
         window.addEventListener('load', () => { lastTime = performance.now(); requestAnimationFrame(animate); audio.init(); });
-        window.addEventListener('mousedown', (e) => { audio.resume(); createRocket(e.clientX); });
-        document.getElementById('toggleAuto').onclick = (e) => { e.stopPropagation(); autoLaunch = !autoLaunch; e.target.textContent = `Auto: ${autoLaunch ? 'ON' : 'OFF'}`; audio.resume(); };
-        document.getElementById('muteBtn').onclick = (e) => { e.stopPropagation(); audio.muted = !audio.muted; e.target.textContent = `Sound: ${audio.muted ? 'OFF' : 'ON'}`; audio.resume(); };
+        window.addEventListener('mousedown', (e) => { 
+            if (!document.getElementById('controls').contains(e.target)) {
+                audio.resume(); createRocket(e.clientX); 
+            }
+        });
+        
+        document.getElementById('toggleAuto').onclick = (e) => { 
+            e.stopPropagation(); autoLaunch = !autoLaunch; e.target.textContent = `Auto: ${autoLaunch ? 'ON' : 'OFF'}`; audio.resume(); 
+        };
+        
+        document.getElementById('simultaneousInput').oninput = (e) => {
+            let val = parseInt(e.target.value);
+            if (isNaN(val) || val < 1) val = 1;
+            if (val > 15) val = 15;
+            CONFIG.launcher.simultaneousCount = val;
+            audio.resume();
+        };
+
+        document.getElementById('densityInput').oninput = (e) => {
+            let val = parseInt(e.target.value);
+            if (isNaN(val) || val < 20) val = 20;
+            if (val > 500) val = 500;
+            CONFIG.launcher.particleDensity = val;
+            audio.resume();
+        };
+
+        document.getElementById('muteBtn').onclick = (e) => { 
+            e.stopPropagation(); audio.muted = !audio.muted; e.target.textContent = `Sound: ${audio.muted ? 'OFF' : 'ON'}`; audio.resume(); 
+        };
+        
+        document.getElementById('qualityBtn').onclick = (e) => { 
+            e.stopPropagation(); CONFIG.quality.highQuality = !CONFIG.quality.highQuality;
+            e.target.textContent = `Quality: ${CONFIG.quality.highQuality ? 'HIGH' : 'LOW'}`;
+            celestial.generateStars();
+            audio.resume();
+        };
     </script>
 </body>
 </html>
