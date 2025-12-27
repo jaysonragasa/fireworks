@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Distant City Fireworks - Advanced Controls</title>
+    <title>Distant City Fireworks - Layered Billboards</title>
     <style>
         body, html {
             margin: 0;
@@ -57,7 +57,7 @@
             pointer-events: auto;
             z-index: 20;
             border: 1px solid rgba(255,255,255,0.15);
-            width: 200px;
+            width: 240px;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             overflow: hidden;
         }
@@ -100,7 +100,39 @@
             font-size: 0.75rem;
         }
 
-        button {
+        .touch-counter {
+            display: flex;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+        }
+
+        .touch-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            width: 32px;
+            height: 32px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+            user-select: none;
+        }
+
+        .touch-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .touch-btn:active {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        button.action-btn {
             background: rgba(255, 255, 255, 0.1);
             border: 1px solid rgba(255, 255, 255, 0.2);
             color: white;
@@ -113,31 +145,33 @@
             text-align: center;
         }
 
-        button:hover {
+        button.action-btn:hover {
             background: rgba(255, 255, 255, 0.2);
         }
 
-        input[type="number"] {
-            background: rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+        input[type="number"].counter-val {
+            background: transparent;
+            border: none;
             color: #0ff;
-            padding: 4px 6px;
-            border-radius: 4px;
-            width: 45px;
+            width: 40px;
             font-family: 'Courier New', monospace;
-            font-size: 0.8rem;
+            font-size: 0.85rem;
             outline: none;
             text-align: center;
+            pointer-events: none;
+            margin: 0;
         }
 
-        input[type="number"]::-webkit-inner-spin-button {
-            opacity: 1;
-            cursor: pointer;
+        input[type="number"].counter-val::-webkit-inner-spin-button,
+        input[type="number"].counter-val::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
         }
 
         label {
             white-space: nowrap;
             opacity: 0.8;
+            flex-grow: 1;
         }
 
         .toggle-icon {
@@ -146,6 +180,15 @@
         }
         .collapsed .toggle-icon {
             transform: rotate(-180deg);
+        }
+
+        #status-indicator {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            font-size: 0.6rem;
+            color: white;
+            opacity: 0.3;
         }
     </style>
 </head>
@@ -162,22 +205,33 @@
             <span class="toggle-icon">▼</span>
         </div>
         <div id="controls-content">
-            <button id="toggleAuto">Auto: ON</button>
+            <button id="toggleAuto" class="action-btn">Auto: ON</button>
             
             <div class="control-row">
                 <label>Simultaneous:</label>
-                <input type="number" id="simultaneousInput" min="1" max="15" value="1">
+                <div class="touch-counter">
+                    <button class="touch-btn" onclick="adjustSimultaneous(-1)">−</button>
+                    <input type="number" id="simultaneousInput" class="counter-val" value="1" readonly>
+                    <button class="touch-btn" onclick="adjustSimultaneous(1)">+</button>
+                </div>
             </div>
 
             <div class="control-row">
                 <label>Density:</label>
-                <input type="number" id="densityInput" min="20" max="500" step="10" value="100">
+                <div class="touch-counter">
+                    <button class="touch-btn" onclick="adjustDensity(-10)">−</button>
+                    <input type="number" id="densityInput" class="counter-val" value="100" readonly>
+                    <button class="touch-btn" onclick="adjustDensity(10)">+</button>
+                </div>
             </div>
 
-            <button id="muteBtn">Sound: ON</button>
-            <button id="qualityBtn">Quality: HIGH</button>
+            <button id="muteBtn" class="action-btn">Sound: ON</button>
+            <button id="fullscreenBtn" class="action-btn">Full Screen</button>
+            <button id="qualityBtn" class="action-btn">Quality: HIGH</button>
         </div>
     </div>
+
+    <div id="status-indicator"></div>
 
     <canvas id="canvas"></canvas>
 
@@ -217,16 +271,32 @@
                 windowToggleInterval: 12000, 
                 billboardRainbowSpeed: 25,
                 billboardWidthBase: 130,
-                billboardHeight: 65
+                billboardHeight: 65,
+                scrollSpeed: 1.5
             },
             launcher: {
                 autoIntervalMin: 800,
                 autoIntervalMax: 2000,
                 simultaneousCount: 1, 
-                particleDensity: 100, // User adjustable density
+                particleDensity: 100, 
                 volleyChance: 0.3
             }
         };
+
+        const HOLIDAY_QUOTES = [
+            "MERRY CHRISTMAS!", "HAPPY NEW YEAR 2026!", "PEACE ON EARTH", "HO HO HO!", "JOY TO THE WORLD", 
+            "SEASON'S GREETINGS", "TIS THE SEASON TO BE JOLLY", "LET IT SNOW", "ALL I WANT FOR CHRISTMAS IS YOU", 
+            "BELIEVE IN THE MAGIC OF CHRISTMAS", "O HOLY NIGHT", "LOVE IS THE BEST GIFT", "MAY YOUR DAYS BE MERRY AND BRIGHT", 
+            "CHRISTMAS IS A FEELING", "JINGLE ALL THE WAY", "WARMEST WISHES", "CHRISTMAS MAGIC IS IN THE AIR", 
+            "PEACE, JOY, AND LOVE", "HAVE YOURSELF A MERRY LITTLE CHRISTMAS", "CHRISTMAS WAVES A MAGIC WAND", 
+            "SLEIGH BELLS RING", "HOME FOR THE HOLIDAYS", "DECK THE HALLS", "MISTLETOE AND WINE", "SPIRIT OF CHRISTMAS",
+            "CHEERS TO 2026!", "A FRESH START AWAITS", "NEW YEAR, NEW BEGINNINGS", "OUT WITH THE OLD, IN WITH THE NEW", 
+            "NEW YEAR, NEW YOU", "SPARKLING NEW YEAR", "LET THE COUNTDOWN BEGIN", "THE BEST IS YET TO COME", 
+            "365 NEW DAYS, 365 NEW CHANCES", "TIME TO SPARKLE", "FRESH BEGINNINGS", "HAPPY 2026!", "A YEAR OF ADVENTURE", 
+            "CELEBRATE WHAT YOU WANT TO SEE MORE OF", "START WHERE YOU ARE", "DREAM BIG FOR 2026", "MAKE THIS YEAR AMAZING", 
+            "HAPPY HOLIDAYS!", "GOOD LUCK IN 2026", "WISHING YOU JOY", "MAY YOUR DREAMS COME TRUE", "A YEAR OF HAPPINESS", 
+            "KINDNESS IS THE SPIRIT", "NEW YEAR VIBES", "STAY BRIGHT!", "WINTER WONDERLAND", "GLOW IN THE DARK"
+        ];
 
         /**
          * AUDIO ENGINE
@@ -326,6 +396,48 @@
                 gain.connect(this.ctx.destination);
                 noise.start(time);
             }
+        }
+
+        /**
+         * SHOOTING STAR Class
+         */
+        class ShootingStar {
+            constructor(w, h) { this.w = w; this.h = h; this.reset(); }
+            reset() {
+                this.x = Math.random() * this.w; this.y = Math.random() * this.h * 0.4;
+                this.speed = 1.2 + Math.random() * 2.0; this.vx = (Math.random() * 2 - 1) * this.speed;
+                this.vy = (0.4 + Math.random() * 0.4) * this.speed; this.active = true;
+                this.alpha = 1; this.decay = 0.003 + Math.random() * 0.005;
+            }
+            update() {
+                this.x += this.vx; this.y += this.vy; this.alpha -= this.decay;
+                if (this.alpha <= 0 || this.x < -100 || this.x > this.w + 100 || this.y > this.h) this.active = false;
+            }
+            draw(ctx) {
+                ctx.save(); ctx.globalAlpha = this.alpha; ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+                ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(this.x, this.y);
+                ctx.lineTo(this.x - this.vx * 25, this.y - this.vy * 25); ctx.stroke();
+                ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(this.x, this.y, 1, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+            }
+        }
+
+        /**
+         * PARTICLE Class
+         */
+        class Particle {
+            constructor(x, y, color, type, indexRatio, speedMult = 1, tilt = 0) {
+                this.x = x; this.y = y; this.color = color; this.alpha = 1;
+                this.decay = CONFIG.physics.particleDecayBase + Math.random() * 0.008; 
+                this.gravity = CONFIG.physics.gravity; this.friction = CONFIG.physics.friction; this.type = type;
+                const angle = Math.PI * 2 * Math.random(); let speed = (2 + Math.random() * 4) * speedMult;
+                if (type === 'sphere') { this.vx = Math.cos(angle) * speed; this.vy = Math.sin(angle) * speed; }
+                else if (type === 'ring') { const a = indexRatio * Math.PI * 2; this.vx = Math.cos(a) * 6 * speedMult; this.vy = Math.sin(a) * 6 * speedMult; }
+                else if (type === 'saturn-ring') { const a = indexRatio * Math.PI * 2; let rx = Math.cos(a) * 8, ry = Math.sin(a) * 2; this.vx = (rx * Math.cos(tilt) - ry * Math.sin(tilt)) * speedMult; this.vy = (rx * Math.sin(tilt) + ry * Math.cos(tilt)) * speedMult; }
+                else if (type === 'willow') { this.vx = Math.cos(angle) * (1 + Math.random() * 3); this.vy = Math.sin(angle) * (1 + Math.random() * 3); this.decay = CONFIG.physics.willowDecayBase + Math.random() * 0.003; this.gravity = CONFIG.physics.willowGravity; this.friction = 0.985; }
+                else if (type === 'heart') { const a = indexRatio * Math.PI * 2; this.vx = (16 * Math.pow(Math.sin(a), 3)) / 2.5; this.vy = -(13 * Math.cos(a) - 5 * Math.cos(2 * a) - 2 * Math.cos(3 * a) - Math.cos(4 * a)) / 2.5; this.vx *= 0.35 * speedMult; this.vy *= 0.35 * speedMult; }
+            }
+            update() { this.vx *= this.friction; this.vy *= this.friction; this.vy += this.gravity; this.x += this.vx; this.y += this.vy; this.alpha -= this.decay; }
+            draw(ctx) { ctx.save(); ctx.globalAlpha = this.alpha; ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(this.x, this.y, 1.2, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
         }
 
         /**
@@ -436,25 +548,46 @@
         }
 
         /**
-         * SHOOTING STAR Class
+         * ROCKET Class
          */
-        class ShootingStar {
-            constructor(w, h) { this.w = w; this.h = h; this.reset(); }
-            reset() {
-                this.x = Math.random() * this.w; this.y = Math.random() * this.h * 0.4;
-                this.speed = 1.2 + Math.random() * 2.0; this.vx = (Math.random() * 2 - 1) * this.speed;
-                this.vy = (0.4 + Math.random() * 0.4) * this.speed; this.active = true;
-                this.alpha = 1; this.decay = 0.003 + Math.random() * 0.005;
+        class Rocket {
+            constructor(x, y, targetY, color) {
+                this.x = x; this.y = y; this.targetY = targetY; this.color = color;
+                this.speed = 3 + Math.random() * 2.5; this.vx = (Math.random() - 0.5) * 1.5; this.vy = -this.speed;
+                this.alive = true; audio.playLaunch();
             }
             update() {
-                this.x += this.vx; this.y += this.vy; this.alpha -= this.decay;
-                if (this.alpha <= 0 || this.x < -100 || this.x > this.w + 100 || this.y > this.h) this.active = false;
+                this.x += this.vx; this.y += this.vy; this.vy += CONFIG.physics.rocketGravity; 
+                if (this.vy >= 0 || this.y <= this.targetY) { this.explode(); this.alive = false; }
             }
-            draw(ctx) {
-                ctx.save(); ctx.globalAlpha = this.alpha; ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
-                ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(this.x, this.y);
-                ctx.lineTo(this.x - this.vx * 25, this.y - this.vy * 25); ctx.stroke();
-                ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(this.x, this.y, 1, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+            draw() {
+                ctx.beginPath(); ctx.arc(this.x, this.y, 1.2, 0, Math.PI * 2); ctx.fillStyle = this.color; ctx.fill();
+                ctx.beginPath(); ctx.moveTo(this.x, this.y); ctx.lineTo(this.x - this.vx * 5, this.y - this.vy * 5);
+                ctx.strokeStyle = this.color; ctx.globalAlpha = 0.2; ctx.stroke(); ctx.globalAlpha = 1.0;
+            }
+            explode() {
+                const types = ['sphere', 'saturn', 'heart', 'ring', 'willow', 'double-ring'];
+                const type = types[Math.floor(Math.random() * types.length)];
+                const isBig = (type === 'saturn' || type === 'willow');
+                audio.playExplosion(isBig, this.vy);
+                if (Math.random() > CONFIG.audio.crackleChance) audio.playCrackle();
+                const baseCount = CONFIG.launcher.particleDensity;
+                if (type === 'saturn') {
+                    const coreCount = Math.floor(baseCount * 0.7);
+                    for (let i = 0; i < coreCount; i++) particles.push(new Particle(this.x, this.y, this.color, 'sphere', 0, 0.7));
+                    const ringCount = Math.floor(baseCount * 0.9), tilt = (Math.random() - 0.5) * Math.PI;
+                    for (let i = 0; i < ringCount; i++) particles.push(new Particle(this.x, this.y, this.color, 'saturn-ring', i/ringCount, 1.2, tilt));
+                } else if (type === 'double-ring') {
+                    const r1 = Math.floor(baseCount * 0.8), r2 = Math.floor(baseCount * 0.6);
+                    for (let i = 0; i < r1; i++) particles.push(new Particle(this.x, this.y, this.color, 'ring', i/r1, 0.8));
+                    for (let i = 0; i < r2; i++) particles.push(new Particle(this.x, this.y, '#ffffff', 'ring', i/r2, 0.5));
+                } else if (type === 'willow') {
+                    const count = Math.floor(baseCount * 1.2);
+                    for (let i = 0; i < count; i++) particles.push(new Particle(this.x, this.y, `hsla(45, 100%, 60%, 1)`, 'willow', i/120));
+                } else {
+                    const count = Math.floor(baseCount * (0.8 + Math.random() * 0.4));
+                    for (let i = 0; i < count; i++) particles.push(new Particle(this.x, this.y, this.color, type, i / count));
+                }
             }
         }
 
@@ -464,7 +597,11 @@
         class Skyline {
             constructor(w, h) {
                 this.buildings = []; this.w = w; this.h = h;
-                this.billboardBuildingIndex = -1; this.generate();
+                this.billboardBuildingIndex = -1;
+                this.textBillboardIndex = -1;
+                this.scrollX = 0;
+                this.currentQuote = HOLIDAY_QUOTES[Math.floor(Math.random() * HOLIDAY_QUOTES.length)];
+                this.generate();
             }
             generate() {
                 this.buildings = []; let x = 0; let maxHeight = 0;
@@ -479,10 +616,27 @@
                         }
                     }
                     this.buildings.push({ x: buildingX, bW, bH, windows, warningLightOffset: Math.random() * Math.PI * 2 });
-                    if (bH > maxHeight && buildingX > 100 && buildingX < this.w - 150) { maxHeight = bH; this.billboardBuildingIndex = this.buildings.length - 1; }
+                    
+                    if (bH > maxHeight && buildingX > 100 && buildingX < this.w - 150) { 
+                        maxHeight = bH; 
+                        this.billboardBuildingIndex = this.buildings.length - 1; 
+                    }
                     x += bW - 2;
                 }
                 if (this.billboardBuildingIndex === -1) this.billboardBuildingIndex = Math.floor(this.buildings.length / 2);
+
+                let farIdx = -1;
+                let maxDist = 0;
+                this.buildings.forEach((b, i) => {
+                    if (i === this.billboardBuildingIndex) return;
+                    const dist = Math.abs(b.x - this.buildings[this.billboardBuildingIndex].x);
+                    if (dist > maxDist) {
+                        maxDist = dist;
+                        farIdx = i;
+                    }
+                });
+                this.textBillboardIndex = farIdx;
+                this.scrollX = CONFIG.city.billboardWidthBase + 100;
             }
             update(dt) {
                 this.buildings.forEach(b => { 
@@ -494,11 +648,20 @@
                         }
                     }); 
                 });
+
+                this.scrollX -= CONFIG.city.scrollSpeed;
+                const estLen = this.currentQuote.length * 10;
+                if (this.scrollX < -(estLen + 200)) {
+                    this.currentQuote = HOLIDAY_QUOTES[Math.floor(Math.random() * HOLIDAY_QUOTES.length)];
+                    this.scrollX = CONFIG.city.billboardWidthBase + 100;
+                }
             }
             draw(ctx, rockets, particles) {
                 const nowTime = Date.now();
                 ctx.save();
-                this.buildings.forEach((b, idx) => {
+                
+                // PASS 1: Base Buildings, Windows, Warning Lights
+                this.buildings.forEach((b) => {
                     const bTop = this.h - b.bH;
                     ctx.fillStyle = '#040406'; ctx.fillRect(b.x, bTop, b.bW, b.bH);
                     this.drawWarningLight(ctx, b, bTop, nowTime);
@@ -509,8 +672,16 @@
                     if (CONFIG.quality.highQuality) {
                         this.drawReflections(ctx, b, rockets, particles);
                     }
-                    if (idx === this.billboardBuildingIndex) this.drawOLED(ctx, b, rockets, particles);
                 });
+
+                // PASS 2: Billboards (Now definitively on top of all buildings)
+                if (this.billboardBuildingIndex !== -1) {
+                    this.drawClockOLED(ctx, this.buildings[this.billboardBuildingIndex], rockets, particles);
+                }
+                if (this.textBillboardIndex !== -1) {
+                    this.drawTextOLED(ctx, this.buildings[this.textBillboardIndex], rockets, particles);
+                }
+
                 ctx.restore();
             }
 
@@ -559,27 +730,20 @@
                 ctx.globalAlpha = 1.0; ctx.globalCompositeOperation = 'source-over';
             }
 
-            drawOLED(ctx, b, rockets, particles) {
-                const now = new Date();
-                const nowMs = Date.now();
-                const timeStr = now.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                const dateStr = now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase();
-                const panelW = Math.max(b.bW * 1.4, CONFIG.city.billboardWidthBase), panelH = CONFIG.city.billboardHeight;
-                let panelX = b.x + (b.bW - panelW) / 2; panelX = Math.max(10, Math.min(panelX, this.w - panelW - 10));
-                const panelY = this.h - b.bH - panelH - 12;
+            drawBillboardFrame(ctx, panelX, panelY, panelW, panelH, b, bTop, rainbowColor, rockets, particles) {
                 ctx.strokeStyle = '#151515'; ctx.lineWidth = 3; ctx.beginPath();
-                ctx.moveTo(b.x + b.bW * 0.2, this.h - b.bH); ctx.lineTo(panelX + panelW * 0.25, panelY + panelH);
-                ctx.moveTo(b.x + b.bW * 0.8, this.h - b.bH); ctx.lineTo(panelX + panelW * 0.75, panelY + panelH); ctx.stroke();
-                const hue = (nowMs / CONFIG.city.billboardRainbowSpeed) % 360;
-                const rainbowColor = `hsl(${hue}, 100%, 70%)`;
-                const darkerRainbow = `hsl(${hue}, 100%, 40%)`;
+                ctx.moveTo(b.x + b.bW * 0.2, bTop); ctx.lineTo(panelX + panelW * 0.25, panelY + panelH);
+                ctx.moveTo(b.x + b.bW * 0.8, bTop); ctx.lineTo(panelX + panelW * 0.75, panelY + panelH); ctx.stroke();
+
                 ctx.fillStyle = '#000';
                 if (CONFIG.quality.highQuality) {
                     ctx.shadowBlur = 25; ctx.shadowColor = rainbowColor;
                 }
                 ctx.fillRect(panelX, panelY, panelW, panelH);
                 ctx.shadowBlur = 0;
+                
                 ctx.strokeStyle = rainbowColor; ctx.lineWidth = 2; ctx.strokeRect(panelX, panelY, panelW, panelH);
+
                 if (CONFIG.quality.highQuality) {
                     const lights = [...rockets];
                     if (particles.length > 0) { for(let i = 0; i < particles.length; i += 15) { if (particles[i].alpha > 0.3) lights.push(particles[i]); } }
@@ -589,11 +753,29 @@
                         const maxDist = 350;
                         if (dist < maxDist) {
                             const intensity = (1 - dist / maxDist) * (light.alpha || 1) * 0.4;
-                            ctx.strokeStyle = light.color; ctx.globalAlpha = intensity; ctx.lineWidth = 2.5; ctx.strokeRect(panelX - 1, panelY - 1, panelW + 2, panelH + 2);
+                            ctx.strokeStyle = light.color; ctx.globalAlpha = intensity; ctx.lineWidth = 2.5;
+                            ctx.strokeRect(panelX - 1, panelY - 1, panelW + 2, panelH + 2);
                         }
                     });
                     ctx.restore();
                 }
+            }
+
+            drawClockOLED(ctx, b, rockets, particles) {
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                const dateStr = now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase();
+                const bTop = this.h - b.bH;
+                const panelW = Math.max(b.bW * 1.4, CONFIG.city.billboardWidthBase), panelH = CONFIG.city.billboardHeight;
+                let panelX = b.x + (b.bW - panelW) / 2; panelX = Math.max(10, Math.min(panelX, this.w - panelW - 10));
+                const panelY = bTop - panelH - 12;
+
+                const hue = (Date.now() / CONFIG.city.billboardRainbowSpeed) % 360;
+                const rainbowColor = `hsl(${hue}, 100%, 70%)`;
+                const darkerRainbow = `hsl(${hue}, 100%, 40%)`;
+
+                this.drawBillboardFrame(ctx, panelX, panelY, panelW, panelH, b, bTop, rainbowColor, rockets, particles);
+
                 ctx.textAlign = 'center'; ctx.font = 'bold 18px "Courier New", monospace';
                 if (CONFIG.quality.highQuality) {
                     ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
@@ -605,8 +787,37 @@
                 ctx.fillText(dateStr, panelX + panelW/2, panelY + 52);
                 ctx.shadowBlur = 0;
             }
+
+            drawTextOLED(ctx, b, rockets, particles) {
+                const bTop = this.h - b.bH;
+                const panelW = Math.max(b.bW * 1.4, CONFIG.city.billboardWidthBase), panelH = CONFIG.city.billboardHeight;
+                let panelX = b.x + (b.bW - panelW) / 2; panelX = Math.max(10, Math.min(panelX, this.w - panelW - 10));
+                const panelY = bTop - panelH - 12;
+
+                const hue = ((Date.now() + 5000) / CONFIG.city.billboardRainbowSpeed) % 360;
+                const rainbowColor = `hsl(${hue}, 100%, 70%)`;
+
+                this.drawBillboardFrame(ctx, panelX, panelY, panelW, panelH, b, bTop, rainbowColor, rockets, particles);
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(panelX + 5, panelY, panelW - 10, panelH);
+                ctx.clip(); 
+
+                ctx.textAlign = 'left';
+                ctx.font = 'bold 16px "Courier New", monospace';
+                if (CONFIG.quality.highQuality) {
+                    ctx.shadowBlur = 8; ctx.shadowColor = rainbowColor;
+                }
+                ctx.fillStyle = rainbowColor;
+                ctx.fillText(this.currentQuote, panelX + this.scrollX, panelY + panelH / 2 + 6);
+                ctx.restore();
+            }
         }
 
+        /**
+         * GLOBALS & HELPERS
+         */
         const audio = new SoundEngine();
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
@@ -614,73 +825,55 @@
         let particles = [], rockets = [];
         let autoLaunch = true, lastAutoLaunch = 0, lastTime = 0;
 
+        const saveSettings = () => {
+            const data = {
+                simultaneousCount: CONFIG.launcher.simultaneousCount,
+                particleDensity: CONFIG.launcher.particleDensity,
+                highQuality: CONFIG.quality.highQuality,
+                autoLaunch: autoLaunch,
+                muted: audio.muted
+            };
+            localStorage.setItem('fireworks_settings', JSON.stringify(data));
+            const indicator = document.getElementById('status-indicator');
+            indicator.innerText = 'Settings Saved Locally';
+            setTimeout(() => indicator.innerText = '', 2000);
+        };
+
+        const loadSettings = () => {
+            const stored = localStorage.getItem('fireworks_settings');
+            if (!stored) return;
+            try {
+                const data = JSON.parse(stored);
+                if (data.simultaneousCount) {
+                    CONFIG.launcher.simultaneousCount = data.simultaneousCount;
+                    document.getElementById('simultaneousInput').value = data.simultaneousCount;
+                }
+                if (data.particleDensity) {
+                    CONFIG.launcher.particleDensity = data.particleDensity;
+                    document.getElementById('densityInput').value = data.particleDensity;
+                }
+                if (data.highQuality !== undefined) {
+                    CONFIG.quality.highQuality = data.highQuality;
+                    document.getElementById('qualityBtn').textContent = `Quality: ${CONFIG.quality.highQuality ? 'HIGH' : 'LOW'}`;
+                }
+                if (data.autoLaunch !== undefined) {
+                    autoLaunch = data.autoLaunch;
+                    document.getElementById('toggleAuto').textContent = `Auto: ${autoLaunch ? 'ON' : 'OFF'}`;
+                }
+                if (data.muted !== undefined) {
+                    audio.muted = data.muted;
+                    document.getElementById('muteBtn').textContent = `Sound: ${audio.muted ? 'OFF' : 'ON'}`;
+                }
+            } catch (e) {
+                console.error("Local load failed", e);
+            }
+        };
+
         function resize() {
             width = canvas.width = window.innerWidth;
             height = canvas.height = window.innerHeight;
             city = new Skyline(width, height);
             celestial = new Celestial(width, height);
-        }
-        window.addEventListener('resize', resize);
-        resize();
-
-        class Rocket {
-            constructor(x, y, targetY, color) {
-                this.x = x; this.y = y; this.targetY = targetY; this.color = color;
-                this.speed = 3 + Math.random() * 2.5; this.vx = (Math.random() - 0.5) * 1.5; this.vy = -this.speed;
-                this.alive = true; audio.playLaunch();
-            }
-            update() {
-                this.x += this.vx; this.y += this.vy; this.vy += CONFIG.physics.rocketGravity; 
-                if (this.vy >= 0 || this.y <= this.targetY) { this.explode(); this.alive = false; }
-            }
-            draw() {
-                ctx.beginPath(); ctx.arc(this.x, this.y, 1.2, 0, Math.PI * 2); ctx.fillStyle = this.color; ctx.fill();
-                ctx.beginPath(); ctx.moveTo(this.x, this.y); ctx.lineTo(this.x - this.vx * 5, this.y - this.vy * 5);
-                ctx.strokeStyle = this.color; ctx.globalAlpha = 0.2; ctx.stroke(); ctx.globalAlpha = 1.0;
-            }
-            explode() {
-                const types = ['sphere', 'saturn', 'heart', 'ring', 'willow', 'double-ring'];
-                const type = types[Math.floor(Math.random() * types.length)];
-                const isBig = (type === 'saturn' || type === 'willow');
-                audio.playExplosion(isBig, this.vy);
-                if (Math.random() > CONFIG.audio.crackleChance) audio.playCrackle();
-                
-                // Use user-defined particle density
-                const baseCount = CONFIG.launcher.particleDensity;
-                
-                if (type === 'saturn') {
-                    const coreCount = Math.floor(baseCount * 0.7);
-                    for (let i = 0; i < coreCount; i++) particles.push(new Particle(this.x, this.y, this.color, 'sphere', 0, 0.7));
-                    const ringCount = Math.floor(baseCount * 0.9), tilt = (Math.random() - 0.5) * Math.PI;
-                    for (let i = 0; i < ringCount; i++) particles.push(new Particle(this.x, this.y, this.color, 'saturn-ring', i/ringCount, 1.2, tilt));
-                } else if (type === 'double-ring') {
-                    const r1 = Math.floor(baseCount * 0.8), r2 = Math.floor(baseCount * 0.6);
-                    for (let i = 0; i < r1; i++) particles.push(new Particle(this.x, this.y, this.color, 'ring', i/r1, 0.8));
-                    for (let i = 0; i < r2; i++) particles.push(new Particle(this.x, this.y, '#ffffff', 'ring', i/r2, 0.5));
-                } else if (type === 'willow') {
-                    const count = Math.floor(baseCount * 1.2);
-                    for (let i = 0; i < count; i++) particles.push(new Particle(this.x, this.y, `hsla(45, 100%, 60%, 1)`, 'willow', i/count));
-                } else {
-                    const count = Math.floor(baseCount * (0.8 + Math.random() * 0.4));
-                    for (let i = 0; i < count; i++) particles.push(new Particle(this.x, this.y, this.color, type, i / count));
-                }
-            }
-        }
-
-        class Particle {
-            constructor(x, y, color, type, indexRatio, speedMult = 1, tilt = 0) {
-                this.x = x; this.y = y; this.color = color; this.alpha = 1;
-                this.decay = CONFIG.physics.particleDecayBase + Math.random() * 0.008; 
-                this.gravity = CONFIG.physics.gravity; this.friction = CONFIG.physics.friction; this.type = type;
-                const angle = Math.PI * 2 * Math.random(); let speed = (2 + Math.random() * 4) * speedMult;
-                if (type === 'sphere') { this.vx = Math.cos(angle) * speed; this.vy = Math.sin(angle) * speed; }
-                else if (type === 'ring') { const a = indexRatio * Math.PI * 2; this.vx = Math.cos(a) * 6 * speedMult; this.vy = Math.sin(a) * 6 * speedMult; }
-                else if (type === 'saturn-ring') { const a = indexRatio * Math.PI * 2; let rx = Math.cos(a) * 8, ry = Math.sin(a) * 2; this.vx = (rx * Math.cos(tilt) - ry * Math.sin(tilt)) * speedMult; this.vy = (rx * Math.sin(tilt) + ry * Math.cos(tilt)) * speedMult; }
-                else if (type === 'willow') { this.vx = Math.cos(angle) * (1 + Math.random() * 3); this.vy = Math.sin(angle) * (1 + Math.random() * 3); this.decay = CONFIG.physics.willowDecayBase + Math.random() * 0.003; this.gravity = CONFIG.physics.willowGravity; this.friction = 0.985; }
-                else if (type === 'heart') { const a = indexRatio * Math.PI * 2; this.vx = (16 * Math.pow(Math.sin(a), 3)) / 2.5; this.vy = -(13 * Math.cos(a) - 5 * Math.cos(2 * a) - 2 * Math.cos(3 * a) - Math.cos(4 * a)) / 2.5; this.vx *= 0.35 * speedMult; this.vy *= 0.35 * speedMult; }
-            }
-            update() { this.vx *= this.friction; this.vy *= this.friction; this.vy += this.gravity; this.x += this.vx; this.y += this.vy; this.alpha -= this.decay; }
-            draw(ctx) { ctx.save(); ctx.globalAlpha = this.alpha; ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(this.x, this.y, 1.2, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
         }
 
         function createRocket(manualX) {
@@ -692,7 +885,9 @@
             const dt = time - lastTime; lastTime = time;
             ctx.fillStyle = CONFIG.quality.highQuality ? `rgba(2, 2, 6, ${CONFIG.quality.motionBlurOpacity})` : 'rgb(2, 2, 6)';
             ctx.fillRect(0, 0, width, height);
-            celestial.update(dt); celestial.draw(ctx);
+            if (celestial) {
+                celestial.update(dt); celestial.draw(ctx);
+            }
             if (autoLaunch && time - lastAutoLaunch > CONFIG.launcher.autoIntervalMin + Math.random() * (CONFIG.launcher.autoIntervalMax - CONFIG.launcher.autoIntervalMin)) { 
                 for(let i=0; i<CONFIG.launcher.simultaneousCount; i++) {
                     setTimeout(() => createRocket(), i * 150);
@@ -701,15 +896,57 @@
             }
             rockets = rockets.filter(r => { r.update(); r.draw(); return r.alive; });
             particles = particles.filter(p => { p.update(); p.draw(ctx); return p.alpha > 0; });
-            city.update(dt); city.draw(ctx, rockets, particles);
+            if (city) {
+                city.update(dt); city.draw(ctx, rockets, particles);
+            }
             requestAnimationFrame(animate);
         }
 
-        function toggleSettings() {
+        window.toggleSettings = () => {
             document.getElementById('controls').classList.toggle('collapsed');
+        };
+
+        window.adjustSimultaneous = (delta) => {
+            let val = parseInt(document.getElementById('simultaneousInput').value) + delta;
+            val = Math.max(1, Math.min(val, 15));
+            document.getElementById('simultaneousInput').value = val;
+            CONFIG.launcher.simultaneousCount = val;
+            saveSettings();
+            audio.resume();
+        };
+
+        window.adjustDensity = (delta) => {
+            let val = parseInt(document.getElementById('densityInput').value) + delta;
+            val = Math.max(20, Math.min(val, 500));
+            document.getElementById('densityInput').value = val;
+            CONFIG.launcher.particleDensity = val;
+            saveSettings();
+            audio.resume();
+        };
+
+        function toggleFullScreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.error(`Error attempting to enable full-screen mode: ${err.message}`);
+                });
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
         }
 
-        window.addEventListener('load', () => { lastTime = performance.now(); requestAnimationFrame(animate); audio.init(); });
+        window.addEventListener('resize', resize);
+        
+        window.onload = () => {
+            resize();
+            loadSettings(); 
+            if (celestial) celestial.generateStars();
+            lastTime = performance.now();
+            requestAnimationFrame(animate);
+            audio.init();
+        };
+
         window.addEventListener('mousedown', (e) => { 
             if (!document.getElementById('controls').contains(e.target)) {
                 audio.resume(); createRocket(e.clientX); 
@@ -717,35 +954,35 @@
         });
         
         document.getElementById('toggleAuto').onclick = (e) => { 
-            e.stopPropagation(); autoLaunch = !autoLaunch; e.target.textContent = `Auto: ${autoLaunch ? 'ON' : 'OFF'}`; audio.resume(); 
+            e.stopPropagation(); autoLaunch = !autoLaunch; e.target.textContent = `Auto: ${autoLaunch ? 'ON' : 'OFF'}`; 
+            saveSettings();
+            audio.resume(); 
         };
         
-        document.getElementById('simultaneousInput').oninput = (e) => {
-            let val = parseInt(e.target.value);
-            if (isNaN(val) || val < 1) val = 1;
-            if (val > 15) val = 15;
-            CONFIG.launcher.simultaneousCount = val;
-            audio.resume();
-        };
-
-        document.getElementById('densityInput').oninput = (e) => {
-            let val = parseInt(e.target.value);
-            if (isNaN(val) || val < 20) val = 20;
-            if (val > 500) val = 500;
-            CONFIG.launcher.particleDensity = val;
-            audio.resume();
-        };
-
         document.getElementById('muteBtn').onclick = (e) => { 
-            e.stopPropagation(); audio.muted = !audio.muted; e.target.textContent = `Sound: ${audio.muted ? 'OFF' : 'ON'}`; audio.resume(); 
+            e.stopPropagation(); audio.muted = !audio.muted; e.target.textContent = `Sound: ${audio.muted ? 'OFF' : 'ON'}`; 
+            saveSettings();
+            audio.resume(); 
+        };
+
+        document.getElementById('fullscreenBtn').onclick = (e) => {
+            e.stopPropagation();
+            toggleFullScreen();
+            audio.resume();
         };
         
         document.getElementById('qualityBtn').onclick = (e) => { 
             e.stopPropagation(); CONFIG.quality.highQuality = !CONFIG.quality.highQuality;
             e.target.textContent = `Quality: ${CONFIG.quality.highQuality ? 'HIGH' : 'LOW'}`;
-            celestial.generateStars();
+            if (celestial) celestial.generateStars();
+            saveSettings();
             audio.resume();
         };
+
+        document.addEventListener('fullscreenchange', () => {
+            const btn = document.getElementById('fullscreenBtn');
+            btn.textContent = document.fullscreenElement ? 'Exit Full Screen' : 'Full Screen';
+        });
     </script>
 </body>
 </html>
